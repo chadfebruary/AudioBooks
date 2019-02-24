@@ -1,10 +1,9 @@
 ﻿using System;
+using System.Security.Cryptography;
+using System.Text;
 using System.Web;
+using System.Web.Security;
 using System.Web.UI;
-using Microsoft.AspNet.Identity;
-using Microsoft.AspNet.Identity.Owin;
-using Owin;
-using AudioBooks.Models;
 
 namespace AudioBooks.Account
 {
@@ -15,7 +14,7 @@ namespace AudioBooks.Account
             RegisterHyperLink.NavigateUrl = "Register";
             // Enable this once you have account confirmation enabled for password reset functionality
             //ForgotPasswordHyperLink.NavigateUrl = "Forgot";
-            OpenAuthLogin.ReturnUrl = Request.QueryString["ReturnUrl"];
+            //OpenAuthLogin.ReturnUrl = Request.QueryString["ReturnUrl"];
             var returnUrl = HttpUtility.UrlEncode(Request.QueryString["ReturnUrl"]);
             if (!String.IsNullOrEmpty(returnUrl))
             {
@@ -27,34 +26,22 @@ namespace AudioBooks.Account
         {
             if (IsValid)
             {
-                // Validate the user password
-                var manager = Context.GetOwinContext().GetUserManager<ApplicationUserManager>();
-                var signinManager = Context.GetOwinContext().GetUserManager<ApplicationSignInManager>();
+                Shared.Models.User user = Data.AudioBooksData.UserDao.GetByUserName(Email.Text);
 
-                // This doen't count login failures towards account lockout
-                // To enable password failures to trigger lockout, change to shouldLockout: true
-                var result = signinManager.PasswordSignIn(Email.Text, Password.Text, RememberMe.Checked, shouldLockout: false);
-
-                switch (result)
+                if (user.Password.Equals(Login.MD5Hash(Password.Text)))
                 {
-                    case SignInStatus.Success:
-                        IdentityHelper.RedirectToReturnUrl(Request.QueryString["ReturnUrl"], Response);
-                        break;
-                    case SignInStatus.LockedOut:
-                        Response.Redirect("/Account/Lockout");
-                        break;
-                    case SignInStatus.RequiresVerification:
-                        Response.Redirect(String.Format("/Account/TwoFactorAuthenticationSignIn?ReturnUrl={0}&RememberMe={1}", 
-                                                        Request.QueryString["ReturnUrl"],
-                                                        RememberMe.Checked),
-                                          true);
-                        break;
-                    case SignInStatus.Failure:
-                    default:
-                        FailureText.Text = "Invalid login attempt";
-                        ErrorMessage.Visible = true;
-                        break;
+                    FormsAuthentication.SetAuthCookie(user.UserName.ToLower(), user.RememberMe);
+
+                    IdentityHelper.RedirectToReturnUrl(Request.QueryString["ReturnUrl"], Response);
                 }
+            }
+        }
+
+        public static string MD5Hash(string value)
+        {
+            using (MD5 md5 = MD5.Create())
+            {
+                return Convert.ToBase64String(md5.ComputeHash(Encoding.UTF8.GetBytes(value ?? string.Empty)));
             }
         }
     }
